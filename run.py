@@ -49,6 +49,19 @@ TRACK_OUTER = pygame.Rect(50, 50, 700, 500)
 TRACK_INNER = pygame.Rect(150, 150, 500, 300)
 
 
+TRACK_DECAL_VIL = pygame.image.load("assets/villager.png")
+TRACK_DECAL_BOAR = pygame.image.load("assets/boar.png")
+TRACK_DECAL_MON = pygame.image.load("assets/monastery.png")
+TRACK_DECAL_PALM = pygame.image.load("assets/palm_tree.png")
+DECAL_SETTINGS = [
+    (TRACK_DECAL_VIL, 1, 50),
+    (TRACK_DECAL_BOAR, 1, 60),
+    (TRACK_DECAL_MON, 1, 200),
+    (TRACK_DECAL_PALM, 2, 100),
+]
+TRACK_DECALS = []
+
+
 TRACK_TYPE = 'race_track'   # default theme, used until the player picks one
 
 TRACK_SURFACE_COLORS = {'race_track': (55, 55, 65), 'forest_path': (177, 177, 111)}
@@ -80,7 +93,7 @@ COLOR_OPTIONS_BY_THEME = {
 }
 COLOR_IMAGE_PATHS_BY_THEME = { # from AoE2 game files
     'race_track': {
-        "Blue": "assets/cobra_car_red.png",
+        "Blue": "assets/cobra_car_blue.png",
         "Red": "assets/cobra_car_red.png",
         "Green": "assets/cobra_car_green.png",
         "Yellow": "assets/cobra_car_yellow.png",
@@ -131,7 +144,7 @@ SOUND_EFFECTS_BY_THEME = { #from https://www.myinstants.com/
         "countdown_1_sound": "assets/aoe_taunt_1_yes.mp3",
         "race_start": "assets/aoe_viking_horn.mp3",
         "race_end":  "assets/aoe2-monk-conversion-warning-sound-clip.mp3",
-        "new_game":  "assets/aoe_cobra_car_sound.mp3",
+        "new_game":  "assets/aoe2-14-start-the-game-already.mp3",
     },
     'forest_path': {
         "track_selection": "assets/aoe_wololo_sound.wav",
@@ -164,6 +177,7 @@ START_LINE_RECT = pygame.Rect(
 
 PLAY_AGAIN_BUTTON = pygame.Rect(0, 0, 220, 60)
 PLAY_AGAIN_BUTTON.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100)
+
 
 
 class GameObject:
@@ -234,7 +248,7 @@ ACTIVE_SOUNDS = {}
 
 def apply_theme(theme_key):
     global TRACK_TYPE, TRACK_SURFACE_COLOR, TRACK_HOLE_COLOR, TRACK_BORDER_COLOR, TRACK_LINES_COLOR
-    global TRACK_TEXTURE, HOLE_TEXTURE, BACKGROUND_TEXTURE
+    global TRACK_TEXTURE, HOLE_TEXTURE, BACKGROUND_TEXTURE, TRACK_DECALS
     global ACTIVE_COLOR_OPTIONS, ACTIVE_COLOR_IMAGE_PATHS, ACTIVE_COLOR_IMAGE_SIZES, ACTIVE_SOUNDS, swatch_rects
 
     TRACK_TYPE = theme_key
@@ -246,6 +260,7 @@ def apply_theme(theme_key):
     TRACK_TEXTURE = generate_texture(TRACK_OUTER.width, TRACK_OUTER.height, base_color=TRACK_SURFACE_COLOR, variation=50)
     HOLE_TEXTURE = generate_texture(TRACK_INNER.width, TRACK_INNER.height, base_color=TRACK_HOLE_COLOR, variation=150)
     BACKGROUND_TEXTURE = generate_texture(SCREEN_WIDTH, SCREEN_HEIGHT, base_color=TRACK_HOLE_COLOR, variation=150)
+    TRACK_DECALS = build_track_decals()
 
     ACTIVE_COLOR_OPTIONS = COLOR_OPTIONS_BY_THEME[theme_key]
     ACTIVE_COLOR_IMAGE_PATHS = COLOR_IMAGE_PATHS_BY_THEME[theme_key]
@@ -462,7 +477,50 @@ def draw_start_line(surface):
                 START_LINE_CHECKER_SIZE,
             )
             pygame.draw.rect(surface, color, checker_rect)
-                         
+
+
+def build_track_decals(margin=15, padding=10, max_attempts=50):
+    placed = []
+    area = TRACK_INNER.inflate(-2 * margin, -2 * margin)   # keep decals off the barrier edge
+
+    for source, count, size in DECAL_SETTINGS:
+        for _ in range(count):
+            # Fixed size: the longest side equals `size`, the other side follows
+            scale = size / max(source.get_width(), source.get_height())
+            width = max(1, int(source.get_width() * scale))
+            height = max(1, int(source.get_height() * scale))
+            image = pygame.transform.smoothscale(source, (width, height))
+
+            # Try random spots until one doesn't overlap an already-placed decal
+            for _ in range(max_attempts):
+                x = random.randint(area.left, area.right - width)
+                y = random.randint(area.top, area.bottom - height)
+                rect = pygame.Rect(x, y, width, height)
+                if not any(rect.inflate(padding, padding).colliderect(r) for _, r in placed):
+                    placed.append((image, rect))
+                    break
+
+    placed.sort(key=lambda d: d[1].bottom)   # lower decals draw on top, for a simple depth effect
+    return placed
+
+
+def draw_track_decals(surface):
+    for image, rect in TRACK_DECALS:
+        surface.blit(image, rect)
+
+
+def draw_track(surface):
+    surface.blit(BACKGROUND_TEXTURE)  
+    surface.blit(TRACK_TEXTURE, TRACK_OUTER.topleft)  
+    #pygame.draw.rect(surface, TRACK_SURFACE_COLOR, TRACK_OUTER)
+    surface.blit(HOLE_TEXTURE, TRACK_INNER.topleft)  
+    #pygame.draw.rect(surface, TRACK_HOLE_COLOR, TRACK_INNER)
+    pygame.draw.rect(surface, TRACK_BORDER_COLOR, TRACK_OUTER, TRACK_BORDER_WIDTH)
+    pygame.draw.rect(surface, TRACK_BORDER_COLOR, TRACK_INNER, TRACK_BORDER_WIDTH)
+    draw_dashed_rect(surface, TRACK_LINES_COLOR, CENTER_LINE_RECT, width=5, dash_length=30, gap_length=20)
+    draw_start_line(surface) 
+    draw_track_decals(surface)
+
 
 def draw_countdown_screen(surface, player_objects, elapsed_ms):
     draw_track(surface)
@@ -478,19 +536,8 @@ def draw_countdown_screen(surface, player_objects, elapsed_ms):
     number_text = str(int(seconds_left)) if seconds_left > 0 else "GO!"
     number = countdown_font.render(number_text, True, (255, 255, 255))
     number_rect = number.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+
     surface.blit(number, number_rect)
-
-
-def draw_track(surface):
-    surface.blit(BACKGROUND_TEXTURE)  
-    surface.blit(TRACK_TEXTURE, TRACK_OUTER.topleft)  
-    #pygame.draw.rect(surface, TRACK_SURFACE_COLOR, TRACK_OUTER)
-    surface.blit(HOLE_TEXTURE, TRACK_INNER.topleft)  
-    #pygame.draw.rect(surface, TRACK_HOLE_COLOR, TRACK_INNER)
-    pygame.draw.rect(surface, TRACK_BORDER_COLOR, TRACK_OUTER, TRACK_BORDER_WIDTH)
-    pygame.draw.rect(surface, TRACK_BORDER_COLOR, TRACK_INNER, TRACK_BORDER_WIDTH)
-    draw_dashed_rect(surface, TRACK_LINES_COLOR, CENTER_LINE_RECT, width=5, dash_length=30, gap_length=20)
-    draw_start_line(surface) 
 
 
 def draw_finish_screen(surface, winner, player_objects):
