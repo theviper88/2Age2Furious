@@ -30,6 +30,25 @@ THEME_SWATCH_HEIGHT = 120
 THEME_SWATCH_GAP = 40  
 
 
+MODE_OPTIONS = [
+    ("vs Computer", "vs_computer"),
+    ("Two Players", "two_player"),
+    ("Time Trial", "time_trial"),
+]
+MODE_HUMAN_PLAYERS = {
+    "vs_computer": 1,
+    "two_player": 2,
+    "time_trial": 1,
+}
+MODE_BUTTON_WIDTH = 190
+MODE_BUTTON_HEIGHT = 120
+MODE_BUTTON_GAP = 40
+
+CONTROL_SCHEMES = [
+    (pygame.K_RIGHT, pygame.K_LEFT, pygame.K_DOWN, pygame.K_UP),   # player 1: arrow keys
+    (pygame.K_d, pygame.K_a, pygame.K_s, pygame.K_w),              # player 2: WASD
+]
+
 SELECTION_SWATCH_SIZE = 100
 SELECTION_SWATCH_GAP = 30
 SELECTION_SWATCHES_PER_ROW = 4
@@ -178,10 +197,19 @@ START_LINE_RECT = pygame.Rect(
 PLAY_AGAIN_BUTTON = pygame.Rect(0, 0, 220, 60)
 PLAY_AGAIN_BUTTON.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100)
 
+AI_SPEED = 4              # humans move at 5, so a clean human run can beat it
+AI_WAYPOINT_RADIUS = 15   # how close counts as "reached" (larger = cuts corners more)
+AI_WAYPOINTS = [
+    CENTER_LINE_RECT.topright,
+    CENTER_LINE_RECT.bottomright,
+    CENTER_LINE_RECT.bottomleft,
+    CENTER_LINE_RECT.topleft,
+]
+
 
 
 class GameObject:
-    def __init__(self, x, y, width, height, image_path, colour_name, speed=5):
+    def __init__(self, x, y, width, height, image_path, colour_name, speed=5, is_ai=False):
         self.base_image = pygame.image.load(image_path).convert_alpha()
         self.base_image = pygame.transform.scale(self.base_image, (width, height))
         self.image = self.base_image
@@ -193,6 +221,8 @@ class GameObject:
         self.on_start_line = False
         self.start_pos = (x, y)
         self.colour_name = colour_name
+        self.is_ai = is_ai
+        self.waypoint_index = 0
 
     def move(self, dx, dy, is_valid_position):
         if dx != 0 or dy != 0:
@@ -212,6 +242,21 @@ class GameObject:
         self.rect.y += dy * self.speed
         if not is_valid_position(self.rect):
             self.rect.y = old_y
+
+    def ai_direction(self):
+        """Steer toward the current waypoint. Returns (dx, dy) as -1/0/1, the same
+        form the keyboard produces, so move() handles the rest."""
+        target_x, target_y = AI_WAYPOINTS[self.waypoint_index]
+        cx, cy = self.rect.center
+
+        if math.hypot(target_x - cx, target_y - cy) < AI_WAYPOINT_RADIUS:
+            self.waypoint_index = (self.waypoint_index + 1) % len(AI_WAYPOINTS)
+            target_x, target_y = AI_WAYPOINTS[self.waypoint_index]
+
+        # Only steer on an axis if more than one step away, otherwise it jitters around the line
+        dx = 0 if abs(target_x - cx) < self.speed else (1 if target_x > cx else -1)
+        dy = 0 if abs(target_y - cy) < self.speed else (1 if target_y > cy else -1)
+        return dx, dy
 
     def draw(self, surface):
         surface.blit(self.image, self.rect)
@@ -284,6 +329,18 @@ def update_lap_count(player):
     if colliding and not player.on_start_line:
         player.laps += 1
     player.on_start_line = colliding
+
+
+def lap_status_text(player_objects):
+    return "   ".join(f"{p.colour_name} Laps: {p.laps}" for p in player_objects)
+
+
+def finish_title_text(winner, player_objects):
+    if game_mode == "time_trial":
+        return "Finished!"
+    if game_mode == "vs_computer":
+        return "Computer wins!" if player_objects[winner - 1].is_ai else "You win!"
+    return f"Player {winner} wins!"
 
 
 def build_theme_rects():
@@ -361,6 +418,26 @@ def get_hovered_swatch(mouse_pos):
     return None
 
 
+def build_mode_rects():
+    total_width = len(MODE_OPTIONS) * MODE_BUTTON_WIDTH + (len(MODE_OPTIONS) - 1) * MODE_BUTTON_GAP
+    start_x = (SCREEN_WIDTH - total_width) // 2
+    y = SCREEN_HEIGHT - MODE_BUTTON_HEIGHT - 80   # same height as the theme swatches
+
+    return [
+        pygame.Rect(start_x + i * (MODE_BUTTON_WIDTH + MODE_BUTTON_GAP), y, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT)
+        for i in range(len(MODE_OPTIONS))
+    ]
+
+mode_rects = build_mode_rects()
+
+
+def get_hovered_mode(mouse_pos):
+    for i, rect in enumerate(mode_rects):
+        if rect.collidepoint(mouse_pos):
+            return i
+    return None
+
+
 def draw_theme_select_screen(surface, hovered_index):
     surface.fill(default_background_colour)
 
@@ -389,10 +466,31 @@ def draw_theme_select_screen(surface, hovered_index):
         surface.blit(label, label_rect)
 
 
+def draw_mode_select_screen(surface, hovered_index):
+    surface.fill(default_background_colour)
+
+    logo_rect = LOGO_IMAGE.get_rect(center=(SCREEN_WIDTH // 2, 160))
+    surface.blit(LOGO_IMAGE, logo_rect)
+
+    title = font.render("Choose a mode", True, default_text_colour)
+    title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 340))
+    surface.blit(title, title_rect)
+
+    for i, rect in enumerate(mode_rects):
+        name, _ = MODE_OPTIONS[i]
+        hovered = (i == hovered_index)
+
+        pygame.draw.rect(surface, (90, 90, 100) if hovered else (60, 60, 70), rect, border_radius=8)
+        pygame.draw.rect(surface, (255, 255, 255) if hovered else (200, 200, 200), rect, 4 if hovered else 2, border_radius=8)
+
+        label = font.render(name, True, (240, 240, 240))
+        surface.blit(label, label.get_rect(center=rect.center))
+
+
 def draw_selection_screen(surface, hovered_index, player):
     surface.fill(default_background_colour)
 
-    title_text = f"Player {player}: Select a colour"
+    title_text = "Select a colour" if NO_PLAYERS == 1 else f"Player {player}: Select a colour"
     title = font.render(title_text, True, default_text_colour)
     title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 80))
     surface.blit(title, title_rect)
@@ -410,6 +508,20 @@ def draw_selection_screen(surface, hovered_index, player):
         surface.blit(label, label_rect)
 
 
+def create_ai_player(taken_names, slot):
+    choices = [name for name, _ in ACTIVE_COLOR_OPTIONS if name not in taken_names]
+    name = random.choice(choices)
+    width, height = ACTIVE_COLOR_IMAGE_SIZES[name]
+    x, y = find_start_position(width, height, slot)
+    return GameObject(
+        x=x, y=y, width=width, height=height,
+        image_path=ACTIVE_COLOR_IMAGE_PATHS[name],
+        colour_name=name,
+        speed=AI_SPEED,
+        is_ai=True,
+    )
+
+
 def draw_race_start_screen(surface, player_objects):
     surface.fill(default_background_colour)
 
@@ -419,7 +531,7 @@ def draw_race_start_screen(surface, player_objects):
     surface.blit(title, title_rect)
 
     gap = 40  # space between the two car images
-    total_width = sum(p.rect.width for p in player_objects) + gap
+    total_width = sum(p.rect.width for p in player_objects) + gap * (len(player_objects) - 1)
     start_x = (SCREEN_WIDTH - total_width) // 2
     y = SCREEN_HEIGHT // 2 + 40
 
@@ -430,13 +542,10 @@ def draw_race_start_screen(surface, player_objects):
         x += p.rect.width + gap
 
 
-def find_start_position(width, height):
-    """Find a valid spot on the track to spawn the player, so it never
-    starts inside the hole or outside the boundary."""
-    candidate = pygame.Rect(TRACK_OUTER.x + 20, TRACK_OUTER.y + 20, width, height)
+def find_start_position(width, height, slot=0):
+    candidate = pygame.Rect(TRACK_OUTER.x + 20, TRACK_OUTER.y + 20 + slot * (height + 10), width, height)
     if is_on_track(candidate):
         return candidate.x, candidate.y
-    # Fallback: top-left corner of the outer track
     return TRACK_OUTER.x + 5, TRACK_OUTER.y + 5
 
 
@@ -552,16 +661,13 @@ def draw_finish_screen(surface, winner, player_objects):
     overlay.fill((0, 0, 0))
     surface.blit(overlay, (0, 0))
 
-    title_text = f"Player {winner} wins!"
+    title_text = finish_title_text(winner, player_objects)
     title = countdown_font.render(title_text, True, (240, 240, 240))
     title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
     surface.blit(title, title_rect)
 
     # Laps and timer, carried over from the race screen
-    lap_text = font.render(
-        f"{player_objects[0].colour_name} Laps: {player_objects[0].laps}   {player_objects[1].colour_name} Laps: {player_objects[1].laps}",
-        True, (240, 240, 240)
-    )
+    lap_text = font.render(lap_status_text(player_objects), True, (240, 240, 240))
     screen.blit(lap_text, (200, 10))
 
     timer_text = font.render(f"{final_race_time:.2f}", True, (240, 240, 240))
@@ -579,8 +685,10 @@ def draw_finish_screen(surface, winner, player_objects):
     surface.blit(button_label, button_label_rect)
 
 
+
 # --- Main state machine ---
 STATE_THEME_SELECT = "theme_select"
+STATE_MODE_SELECT = "mode_select" 
 STATE_PLAYER_SELECT = "player_select"
 STATE_GET_READY = "get_ready"
 STATE_COUNTDOWN = "countdown"
@@ -588,13 +696,13 @@ STATE_PLAY = "play"
 STATE_FINISHED = "finished" 
 state = STATE_THEME_SELECT
 
-NO_PLAYERS = 2
+#NO_PLAYERS = 2
 WINNING_LAPS = 5
 
 race_start_time = 0
 final_race_time = 0.0
 player = 1
-players = [None]*NO_PLAYERS
+#players = [None]*NO_PLAYERS
 winner = None 
 running = True
 
@@ -613,8 +721,18 @@ while running:
                 chosen_theme_key = THEME_OPTIONS[hovered][1]
                 apply_theme(chosen_theme_key)
                 ACTIVE_SOUNDS["track_selection"].play()
-                state = STATE_PLAYER_SELECT
+                state = STATE_MODE_SELECT 
 
+        elif state == STATE_MODE_SELECT and event.type == pygame.MOUSEBUTTONDOWN:
+            hovered = get_hovered_mode(mouse_pos)
+            if hovered is not None:
+                game_mode = MODE_OPTIONS[hovered][1]
+                NO_PLAYERS = MODE_HUMAN_PLAYERS[game_mode]
+                players = [None] * NO_PLAYERS
+                player = 1
+                ACTIVE_SOUNDS["colour_selection"].play()
+                state = STATE_PLAYER_SELECT
+        
         elif state == STATE_PLAYER_SELECT and event.type == pygame.MOUSEBUTTONDOWN:
             ACTIVE_SOUNDS["colour_selection"].play()
             hovered = get_hovered_swatch(mouse_pos)
@@ -623,7 +741,7 @@ while running:
                 chosen_name = ACTIVE_COLOR_OPTIONS[hovered][0]   
                 chosen_image = ACTIVE_COLOR_IMAGE_PATHS[chosen_name]    
                 chosen_image_size = ACTIVE_COLOR_IMAGE_SIZES[chosen_name]
-                start_x, start_y = find_start_position(chosen_image_size[0], chosen_image_size[1])
+                start_x, start_y = find_start_position(chosen_image_size[0], chosen_image_size[1], slot=player-1)
                 players[player-1] = GameObject(
                     x=start_x,
                     y=start_y,
@@ -633,11 +751,14 @@ while running:
                     colour_name = chosen_name,
                 )
                 if player == NO_PLAYERS:
+                    if game_mode == "vs_computer":
+                        taken = [p.colour_name for p in players]
+                        players.append(create_ai_player(taken, slot=len(players)))
                     get_ready_start_time = pygame.time.get_ticks()
                     stop_music()
-                    state = STATE_GET_READY 
+                    state = STATE_GET_READY
                 else:
-                    player += 1
+                   player += 1
 
         elif state == STATE_FINISHED and event.type == pygame.MOUSEBUTTONDOWN:
             if PLAY_AGAIN_BUTTON.collidepoint(mouse_pos):
@@ -651,6 +772,10 @@ while running:
     if state == STATE_THEME_SELECT:
         hovered_index = get_hovered_theme(mouse_pos)
         draw_theme_select_screen(screen, hovered_index)
+
+    elif state == STATE_MODE_SELECT:
+        hovered_index = get_hovered_mode(mouse_pos)
+        draw_mode_select_screen(screen, hovered_index)
     
     elif state == STATE_PLAYER_SELECT:
         hovered_index = get_hovered_swatch(mouse_pos)
@@ -686,16 +811,15 @@ while running:
     elif state == STATE_PLAY:
 
         keys = pygame.key.get_pressed()
-
-        dx = keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]
-        dy = keys[pygame.K_DOWN] - keys[pygame.K_UP]
-        players[0].move(dx, dy, is_on_track)
-        update_lap_count(players[0])
-
-        dx2 = keys[pygame.K_d] - keys[pygame.K_a]
-        dy2 = keys[pygame.K_s] - keys[pygame.K_w]
-        players[1].move(dx2, dy2, is_on_track)
-        update_lap_count(players[1])
+        for i, p in enumerate(players):
+            if p.is_ai:
+                dx, dy = p.ai_direction()
+            else:
+                right, left, down, up = CONTROL_SCHEMES[i]   # humans always come first, so i is their control index
+                dx = keys[right] - keys[left]
+                dy = keys[down] - keys[up]
+            p.move(dx, dy, is_on_track)
+            update_lap_count(p)
 
         race_elapsed_seconds = (pygame.time.get_ticks() - race_start_time) / 1000
 
@@ -709,10 +833,10 @@ while running:
                 break
 
         draw_track(screen)
-        players[0].draw(screen)
-        players[1].draw(screen)
+        for p in players:
+            p.draw(screen)
 
-        lap_text = font.render(f"{players[0].colour_name} Laps: {players[0].laps}   {players[1].colour_name} Laps: {players[1].laps}", True, (240, 240, 240))
+        lap_text = font.render(lap_status_text(players), True, (240, 240, 240))
         screen.blit(lap_text, (200, 10))
 
         timer_text = font.render(f"{race_elapsed_seconds:.2f}", True, (240, 240, 240))
