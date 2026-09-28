@@ -1,0 +1,9 @@
+Planned:
+- fix lap counter
+- add a 'top times' leader board
+- change track shape
+- improve graphics
+
+Challenging
+- add a 'ghost car' of best lap 
+- procedurally generate tracks

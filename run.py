@@ -8,7 +8,7 @@ pygame.init()
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Game Object Test")
+pygame.display.set_caption("2Age2Furious")
 clock = pygame.time.Clock()
 font = pygame.font.SysFont(None, 40)
 countdown_font = pygame.font.SysFont(None, 160)
@@ -110,7 +110,7 @@ COLOR_OPTIONS_BY_THEME = {
         ("Orange", (255, 165, 0)),
     ]
 }
-COLOR_IMAGE_PATHS_BY_THEME = { # from AoE2 game files
+COLOR_IMAGE_PATHS_BY_THEME = { # from AoE2 game files https://ageofnotes.com/sld-extractor-online-aoe2/
     'race_track': {
         "Blue": "assets/cobra_car_blue.png",
         "Red": "assets/cobra_car_red.png",
@@ -154,7 +154,7 @@ COLOR_IMAGE_SIZES_BY_THEME = {
         "Orange": [43,43], 
     }
 }
-SOUND_EFFECTS_BY_THEME = { #from https://www.myinstants.com/
+SOUND_EFFECTS_BY_THEME = { #from aoe2 soundboard https://www.myinstants.com/
     'race_track': {
         "track_selection": "assets/aoe_cobra_car_sound.mp3",
         "colour_selection": "assets/aoe_cobra_car_sound.mp3",
@@ -197,8 +197,8 @@ START_LINE_RECT = pygame.Rect(
 PLAY_AGAIN_BUTTON = pygame.Rect(0, 0, 220, 60)
 PLAY_AGAIN_BUTTON.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100)
 
-AI_SPEED = 5             
-AI_WAYPOINT_RADIUS = 15   # how close counts as "reached" (larger = cuts corners more)
+AI_SPEED = 5
+AI_WAYPOINT_RADIUS = 100   # how close counts as "reached" (larger = cuts corners more)
 AI_WAYPOINTS = [
     CENTER_LINE_RECT.topright,
     CENTER_LINE_RECT.bottomright,
@@ -231,13 +231,18 @@ class GameObject:
     def move(self, dx, dy, is_valid_position):
         if dx != 0 or dy != 0:
             if dx < 0 and dy == 0:
-                # Moving straight backward (left): flip instead of rotating 180,
-                # so decals/details stay upright instead of mirrored on both axes
-                self.image = pygame.transform.flip(self.base_image, True, False)
+                new_image = pygame.transform.flip(self.base_image, True, False)
+                new_angle = self.angle
             else:
-                self.angle = -math.degrees(math.atan2(dy, dx))
-                self.image = pygame.transform.rotate(self.base_image, self.angle)
-            self.rect = self.image.get_rect(center=self.rect.center)
+                new_angle = -math.degrees(math.atan2(dy, dx))
+                new_image = pygame.transform.rotate(self.base_image, new_angle)
+            new_rect = new_image.get_rect(center=self.rect.center)
+
+            # Only turn if the turned car actually fits here
+            if is_valid_position(new_rect):
+                self.image = new_image
+                self.rect = new_rect
+                self.angle = new_angle
 
         old_x, old_y = self.rect.x, self.rect.y
         self.rect.x += dx * self.speed
@@ -246,6 +251,7 @@ class GameObject:
         self.rect.y += dy * self.speed
         if not is_valid_position(self.rect):
             self.rect.y = old_y
+
 
     def ai_direction(self):
         """Steer toward the current waypoint. Returns (dx, dy) as -1/0/1, the same
@@ -579,7 +585,7 @@ def draw_race_start_screen(surface, player_objects):
 
 
 def find_start_position(width, height, slot=0):
-    candidate = pygame.Rect(TRACK_OUTER.x + 20, TRACK_OUTER.y + 20 + slot * (height + 10), width, height)
+    candidate = pygame.Rect(TRACK_OUTER.x + 40, TRACK_OUTER.y + 10 + slot * (height + 10), width, height)
     if is_on_track(candidate):
         return candidate.x, candidate.y
     return TRACK_OUTER.x + 5, TRACK_OUTER.y + 5
@@ -732,13 +738,11 @@ STATE_PLAY = "play"
 STATE_FINISHED = "finished" 
 state = STATE_THEME_SELECT
 
-#NO_PLAYERS = 2
 WINNING_LAPS = 5
 
 race_start_time = 0
 final_race_time = 0.0
 player = 1
-#players = [None]*NO_PLAYERS
 winner = None 
 running = True
 
