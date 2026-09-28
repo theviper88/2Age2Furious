@@ -36,8 +36,11 @@ SELECTION_SWATCHES_PER_ROW = 4
 
 COUNTDOWN_NUMBER_DURATION_MS = 1000
 
-MENU_MUSIC_PATH = "assets/aoe2_8bit.mp3"
-MENU_MUSIC_VOLUME = 0.4
+MENU_MUSIC_PATH = "assets/aoe2_8bit_menu.mp3"
+MENU_MUSIC_VOLUME = 0.2
+
+RACE_MUSIC_PATH = "assets/aoe2_8bit_race.mp3"
+RACE_MUSIC_VOLUME = 0.4
 
 # --- Track definition ---
 # The track is a rectangular "ring": the square may go anywhere inside
@@ -201,13 +204,13 @@ class GameObject:
 
 
 
-def start_menu_music():
-    pygame.mixer.music.load(MENU_MUSIC_PATH)
-    pygame.mixer.music.set_volume(MENU_MUSIC_VOLUME)
+def start_music(MUSIC_PATH, MUSIC_VOLUME):
+    pygame.mixer.music.load(MUSIC_PATH)
+    pygame.mixer.music.set_volume(MUSIC_VOLUME)
     pygame.mixer.music.play(loops=-1)   # -1 means loop forever
 
 
-def stop_menu_music():
+def stop_music():
     pygame.mixer.music.fadeout(500) 
 
 
@@ -548,7 +551,7 @@ players = [None]*NO_PLAYERS
 winner = None 
 running = True
 
-start_menu_music()
+start_music(MENU_MUSIC_PATH, MENU_MUSIC_VOLUME)
 
 while running:
     mouse_pos = pygame.mouse.get_pos()
@@ -584,7 +587,7 @@ while running:
                 )
                 if player == NO_PLAYERS:
                     get_ready_start_time = pygame.time.get_ticks()
-                    stop_menu_music()
+                    stop_music()
                     state = STATE_GET_READY 
                 else:
                     player += 1
@@ -592,7 +595,7 @@ while running:
         elif state == STATE_FINISHED and event.type == pygame.MOUSEBUTTONDOWN:
             if PLAY_AGAIN_BUTTON.collidepoint(mouse_pos):
                 ACTIVE_SOUNDS["new_game"].play()
-                start_menu_music()
+                start_music(MENU_MUSIC_PATH, MENU_MUSIC_VOLUME)
                 player = 1
                 players = [None] * NO_PLAYERS
                 winner = None
@@ -630,6 +633,7 @@ while running:
         if elapsed >= 3 * COUNTDOWN_NUMBER_DURATION_MS:
             race_start_time = pygame.time.get_ticks()
             ACTIVE_SOUNDS["race_start"].play()
+            start_music(RACE_MUSIC_PATH, RACE_MUSIC_VOLUME)
             state = STATE_PLAY
 
     elif state == STATE_PLAY:
@@ -652,6 +656,7 @@ while running:
             if p.laps >= WINNING_LAPS:
                 winner = i + 1
                 final_race_time = race_elapsed_seconds
+                stop_music()
                 ACTIVE_SOUNDS["race_end"].play()
                 state = STATE_FINISHED
                 break
