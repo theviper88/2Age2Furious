@@ -197,7 +197,7 @@ START_LINE_RECT = pygame.Rect(
 PLAY_AGAIN_BUTTON = pygame.Rect(0, 0, 220, 60)
 PLAY_AGAIN_BUTTON.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100)
 
-AI_SPEED = 4              # humans move at 5, so a clean human run can beat it
+AI_SPEED = 5             
 AI_WAYPOINT_RADIUS = 15   # how close counts as "reached" (larger = cuts corners more)
 AI_WAYPOINTS = [
     CENTER_LINE_RECT.topright,
@@ -205,6 +205,10 @@ AI_WAYPOINTS = [
     CENTER_LINE_RECT.bottomleft,
     CENTER_LINE_RECT.topleft,
 ]
+
+MUTE_BUTTON = pygame.Rect(0, 0, 40, 40)
+muted = False
+current_music_volume = MENU_MUSIC_VOLUME
 
 
 
@@ -264,8 +268,10 @@ class GameObject:
 
 
 def start_music(MUSIC_PATH, MUSIC_VOLUME):
+    global current_music_volume
+    current_music_volume = MUSIC_VOLUME
     pygame.mixer.music.load(MUSIC_PATH)
-    pygame.mixer.music.set_volume(MUSIC_VOLUME)
+    pygame.mixer.music.set_volume(0 if muted else MUSIC_VOLUME)
     pygame.mixer.music.play(loops=-1)   # -1 means loop forever
 
 
@@ -316,6 +322,7 @@ def apply_theme(theme_key):
         event_name: pygame.mixer.Sound(path)
         for event_name, path in SOUND_EFFECTS_BY_THEME[theme_key].items()
     }
+    apply_mute()   # add this
 
 
 def is_on_track(rect):
@@ -436,6 +443,35 @@ def get_hovered_mode(mouse_pos):
         if rect.collidepoint(mouse_pos):
             return i
     return None
+
+
+def apply_mute():
+    """Push the current mute state onto the music and every loaded sound effect."""
+    pygame.mixer.music.set_volume(0 if muted else current_music_volume)
+    for sound in ACTIVE_SOUNDS.values():
+        sound.set_volume(0 if muted else 1.0)
+
+
+def draw_mute_button(surface):
+    hovered = MUTE_BUTTON.collidepoint(pygame.mouse.get_pos())
+    #pygame.draw.rect(surface, (90, 90, 100) if hovered else (60, 60, 70), MUTE_BUTTON, border_radius=8)
+    #pygame.draw.rect(surface, (200, 200, 200), MUTE_BUTTON, 2, border_radius=8)
+
+    icon_colour = (240, 240, 240)
+    x, y = MUTE_BUTTON.center
+
+    # Speaker: a small box plus a cone
+    pygame.draw.rect(surface, icon_colour, (x - 12, y - 4, 6, 8))
+    pygame.draw.polygon(surface, icon_colour, [(x - 6, y - 4), (x + 1, y - 10), (x + 1, y + 10), (x - 6, y + 4)])
+
+    if muted:
+        # cross where the sound waves would be
+        pygame.draw.line(surface, icon_colour, (x + 5, y - 6), (x + 13, y + 6), 3)
+        pygame.draw.line(surface, icon_colour, (x + 13, y - 6), (x + 5, y + 6), 3)
+    else:
+        # Two sound-wave arcs
+        for r in (6, 11):
+            pygame.draw.arc(surface, icon_colour, (x + 1 - r, y - r, 2 * r, 2 * r), -math.pi / 3, math.pi / 3, 2)
 
 
 def draw_theme_select_screen(surface, hovered_index):
@@ -715,6 +751,10 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and MUTE_BUTTON.collidepoint(mouse_pos):
+            muted = not muted
+            apply_mute()
+
         elif state == STATE_THEME_SELECT and event.type == pygame.MOUSEBUTTONDOWN:
             hovered = get_hovered_theme(mouse_pos)
             if hovered is not None:
@@ -846,6 +886,7 @@ while running:
     elif state == STATE_FINISHED:
         draw_finish_screen(screen, winner, players)
 
+    draw_mute_button(screen)
     pygame.display.flip()
     clock.tick(60)
 
