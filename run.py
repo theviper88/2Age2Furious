@@ -36,6 +36,9 @@ SELECTION_SWATCHES_PER_ROW = 4
 
 COUNTDOWN_NUMBER_DURATION_MS = 1000
 
+MENU_MUSIC_PATH = "assets/aoe2_8bit.mp3"
+MENU_MUSIC_VOLUME = 0.4
+
 # --- Track definition ---
 # The track is a rectangular "ring": the square may go anywhere inside
 # TRACK_OUTER, but may not enter TRACK_INNER (the hole in the middle).
@@ -196,6 +199,16 @@ class GameObject:
     def draw(self, surface):
         surface.blit(self.image, self.rect)
 
+
+
+def start_menu_music():
+    pygame.mixer.music.load(MENU_MUSIC_PATH)
+    pygame.mixer.music.set_volume(MENU_MUSIC_VOLUME)
+    pygame.mixer.music.play(loops=-1)   # -1 means loop forever
+
+
+def stop_menu_music():
+    pygame.mixer.music.fadeout(500) 
 
 
 def generate_texture(width, height, base_color, variation):
@@ -535,6 +548,7 @@ players = [None]*NO_PLAYERS
 winner = None 
 running = True
 
+start_menu_music()
 
 while running:
     mouse_pos = pygame.mouse.get_pos()
@@ -570,6 +584,7 @@ while running:
                 )
                 if player == NO_PLAYERS:
                     get_ready_start_time = pygame.time.get_ticks()
+                    stop_menu_music()
                     state = STATE_GET_READY 
                 else:
                     player += 1
@@ -577,6 +592,7 @@ while running:
         elif state == STATE_FINISHED and event.type == pygame.MOUSEBUTTONDOWN:
             if PLAY_AGAIN_BUTTON.collidepoint(mouse_pos):
                 ACTIVE_SOUNDS["new_game"].play()
+                start_menu_music()
                 player = 1
                 players = [None] * NO_PLAYERS
                 winner = None
@@ -597,11 +613,20 @@ while running:
             for p in players:
                 p.rect.topleft = p.start_pos
             countdown_start_time = pygame.time.get_ticks()
+            last_countdown_number = 3
+            ACTIVE_SOUNDS["countdown_3_sound"].play()
             state = STATE_COUNTDOWN
 
     elif state == STATE_COUNTDOWN:
         elapsed = pygame.time.get_ticks() - countdown_start_time
         draw_countdown_screen(screen, players, elapsed)
+        current_number = 3 - elapsed // COUNTDOWN_NUMBER_DURATION_MS
+        if current_number != last_countdown_number:
+            if current_number == 2:
+                ACTIVE_SOUNDS["countdown_2_sound"].play()
+            elif current_number == 1:
+                ACTIVE_SOUNDS["countdown_1_sound"].play()
+        last_countdown_number = current_number
         if elapsed >= 3 * COUNTDOWN_NUMBER_DURATION_MS:
             race_start_time = pygame.time.get_ticks()
             ACTIVE_SOUNDS["race_start"].play()
