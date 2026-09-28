@@ -2,6 +2,13 @@ import pygame
 import math
 import random
 import statistics
+import sys
+import os
+
+
+def resource_path(relative_path):
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
 
 pygame.init()
 
@@ -15,7 +22,7 @@ countdown_font = pygame.font.SysFont(None, 160)
 default_background_colour = (177, 211, 255)
 default_text_colour = (25, 25, 30)
 
-LOGO_IMAGE = pygame.image.load("assets/2age2furious_logo.png").convert_alpha()
+LOGO_IMAGE = pygame.image.load(resource_path("assets/2age2furious_logo.png")).convert_alpha()
 LOGO_WIDTH = 600 
 LOGO_HEIGHT = int(LOGO_IMAGE.get_height() * (LOGO_WIDTH / LOGO_IMAGE.get_width()))  # preserve aspect ratio
 LOGO_IMAGE = pygame.transform.scale(LOGO_IMAGE, (LOGO_WIDTH, LOGO_HEIGHT))
@@ -68,10 +75,10 @@ TRACK_OUTER = pygame.Rect(50, 50, 700, 500)
 TRACK_INNER = pygame.Rect(150, 150, 500, 300)
 
 
-TRACK_DECAL_VIL = pygame.image.load("assets/villager.png")
-TRACK_DECAL_BOAR = pygame.image.load("assets/boar.png")
-TRACK_DECAL_MON = pygame.image.load("assets/monastery.png")
-TRACK_DECAL_PALM = pygame.image.load("assets/palm_tree.png")
+TRACK_DECAL_VIL = pygame.image.load(resource_path("assets/villager.png"))
+TRACK_DECAL_BOAR = pygame.image.load(resource_path("assets/boar.png"))
+TRACK_DECAL_MON = pygame.image.load(resource_path("assets/monastery.png"))
+TRACK_DECAL_PALM = pygame.image.load(resource_path("assets/palm_tree.png"))
 DECAL_SETTINGS = [
     (TRACK_DECAL_VIL, 1, 50),
     (TRACK_DECAL_BOAR, 1, 60),
@@ -214,7 +221,7 @@ current_music_volume = MENU_MUSIC_VOLUME
 
 class GameObject:
     def __init__(self, x, y, width, height, image_path, colour_name, speed=5, is_ai=False):
-        self.base_image = pygame.image.load(image_path).convert_alpha()
+        self.base_image = pygame.image.load(resource_path(image_path)).convert_alpha()
         self.base_image = pygame.transform.scale(self.base_image, (width, height))
         self.image = self.base_image
         self.colour_name = colour_name
@@ -276,7 +283,7 @@ class GameObject:
 def start_music(MUSIC_PATH, MUSIC_VOLUME):
     global current_music_volume
     current_music_volume = MUSIC_VOLUME
-    pygame.mixer.music.load(MUSIC_PATH)
+    pygame.mixer.music.load(resource_path(MUSIC_PATH))
     pygame.mixer.music.set_volume(0 if muted else MUSIC_VOLUME)
     pygame.mixer.music.play(loops=-1)   # -1 means loop forever
 
@@ -325,7 +332,7 @@ def apply_theme(theme_key):
     swatch_rects = build_swatch_rects()   # rebuild in case a theme ever has a different number of colours
 
     ACTIVE_SOUNDS = {
-        event_name: pygame.mixer.Sound(path)
+        event_name: pygame.mixer.Sound(resource_path(path))
         for event_name, path in SOUND_EFFECTS_BY_THEME[theme_key].items()
     }
     apply_mute()   # add this
@@ -386,7 +393,7 @@ def build_theme_previews():
         preview_path = COLOR_IMAGE_PATHS_BY_THEME[key][preview_colour_name]
         preview_size = COLOR_IMAGE_SIZES_BY_THEME[key][preview_colour_name]
 
-        preview_image = pygame.image.load(preview_path).convert_alpha()
+        preview_image = pygame.image.load(resource_path(preview_path)).convert_alpha()
         # Scale to fit inside the swatch with some margin, preserving aspect ratio
         max_dim = min(THEME_SWATCH_WIDTH, THEME_SWATCH_HEIGHT) - 20
         scale_factor = max_dim / statistics.mean(preview_size)
